@@ -11,8 +11,10 @@ func main() {
 	config.SetParamInt("timeout", 1000)
 
 	context := z3.NewContext(config)
-	_, err := z3.NewSolverForLogic(context, "QF_ABV")
+	solver, err := z3.NewSolverForLogic(context, "QF_ABV")
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
+	fmt.Println(solver)
 }
