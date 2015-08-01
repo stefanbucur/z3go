@@ -16,6 +16,10 @@ func (solver *Solver) GetContext() *Context {
 	return solver.context
 }
 
+func (solver *Solver) String() string {
+	return C.GoString(C.Z3_solver_to_string(solver.context.z3val, solver.z3val))
+}
+
 func (solver *Solver) Reset() error {
 	C.Z3_solver_reset(solver.context.z3val, solver.z3val)
 	return getError(solver.context)
