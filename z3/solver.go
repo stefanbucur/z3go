@@ -16,6 +16,11 @@ func (solver *Solver) GetContext() *Context {
 	return solver.context
 }
 
+func (solver *Solver) Reset() error {
+	C.Z3_solver_reset(solver.context.z3val, solver.z3val)
+	return getError(solver.context)
+}
+
 // NewSolver creates a new Z3 solver.
 func NewSolver(context *Context) *Solver {
 	solver := &Solver{C.Z3_mk_solver(context.z3val), context}
