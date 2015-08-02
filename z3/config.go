@@ -1,11 +1,8 @@
 package z3
 
-/*
-#cgo LDFLAGS: -lz3
-
-#include <stdlib.h>
-#include <z3.h>
-*/
+// #cgo LDFLAGS: -lz3
+// #include <stdlib.h>
+// #include <z3.h>
 import "C"
 import (
 	"runtime"

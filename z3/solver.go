@@ -1,19 +1,13 @@
 package z3
 
-/*
-#include <stdlib.h>
-#include <z3.h>
-*/
+// #include <stdlib.h>
+// #include <z3.h>
 import "C"
 
 // Solver encapsulates a Z3 solver instance.
 type Solver struct {
 	z3val   C.Z3_solver
 	context *Context
-}
-
-func (solver *Solver) GetContext() *Context {
-	return solver.context
 }
 
 func (solver *Solver) String() string {

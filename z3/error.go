@@ -1,8 +1,6 @@
 package z3
 
-/*
-#include <z3.h>
-*/
+// #include <z3.h>
 import "C"
 import "fmt"
 

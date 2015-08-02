@@ -1,9 +1,7 @@
 package z3
 
-/*
-#include <z3.h>
-#include <stdlib.h>
-*/
+// #include <z3.h>
+// #include <stdlib.h>
 import "C"
 import "unsafe"
 
