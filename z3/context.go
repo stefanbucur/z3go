@@ -1,19 +1,8 @@
 package z3
 
-/*
-#include <z3.h>
-
-Z3_sort mk_bv_sort(Z3_context context, unsigned size) {
-  Z3_sort result = Z3_mk_bv_sort(context, size);
-	Z3_inc_ref(context, (Z3_ast)result);
-	return result;
-}
-*/
+// #include <z3.h>
 import "C"
-import (
-	"runtime"
-	"unsafe"
-)
+import "runtime"
 
 // Context encapsulates a Z3 context.
 type Context struct {
@@ -25,13 +14,11 @@ func (context *Context) finalize() {
 }
 
 func (context *Context) BVSort(size uint) (sort *Sort, err error) {
-	z3sort, err := C.mk_bv_sort(context.z3val, C.uint(size)), getError(context)
+	z3sort, err := C.Z3_mk_bv_sort(context.z3val, C.uint(size)), getError(context)
 	if err != nil {
 		return
 	}
-	z3ast := C.Z3_ast(unsafe.Pointer(z3sort))
-	sort = &Sort{AST{z3ast, context}}
-	sort.initialize()
+	sort = newSort(context, z3sort)
 	return
 }
 

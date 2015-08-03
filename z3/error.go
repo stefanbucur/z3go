@@ -48,6 +48,39 @@ const (
 	Exception ErrorCode = C.Z3_EXCEPTION
 )
 
+func (code ErrorCode) String() string {
+	switch code {
+	case OK:
+		return "OK"
+	case SortError:
+		return "SortError"
+	case IOB:
+		return "IndexOutOfBounds"
+	case InvalidArg:
+		return "InvalidArg"
+	case ParserError:
+		return "ParserError"
+	case NoParser:
+		return "NoParser"
+	case InvalidPattern:
+		return "InvalidPattern"
+	case MemOutFail:
+		return "MemOutFail"
+	case FileAccessError:
+		return "FileAccessError"
+	case InvalidUsage:
+		return "InvalidUsage"
+	case InternalFatal:
+		return "InternalFatal"
+	case DecRefError:
+		return "DecRefError"
+	case Exception:
+		return "Exception"
+	default:
+		return "<unknown>"
+	}
+}
+
 // Error holds the Z3 error code, plus its message
 type Error struct {
 	Code    ErrorCode
@@ -55,10 +88,10 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("%d: %s", e.Code, e.Message)
+	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-func getError(context *Context) *Error {
+func getError(context *Context) error {
 	ec := ErrorCode(C.Z3_get_error_code(context.z3val))
 	if ec == OK {
 		return nil
