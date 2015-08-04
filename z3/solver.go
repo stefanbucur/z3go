@@ -6,34 +6,30 @@ import "C"
 
 // Solver encapsulates a Z3 solver instance.
 type Solver struct {
-	z3val   C.Z3_solver
-	context *Context
+	z3val C.Z3_solver
+	ctx   *Context
 }
 
 func (solver *Solver) String() string {
-	return C.GoString(C.Z3_solver_to_string(solver.context.z3val, solver.z3val))
+	return C.GoString(C.Z3_solver_to_string(solver.ctx.z3val, solver.z3val))
 }
 
 func (solver *Solver) Reset() error {
-	C.Z3_solver_reset(solver.context.z3val, solver.z3val)
-	return getError(solver.context)
+	C.Z3_solver_reset(solver.ctx.z3val, solver.z3val)
+	return getError(solver.ctx)
 }
 
 // NewSolver creates a new Z3 solver.
-func NewSolver(context *Context) *Solver {
-	solver := &Solver{C.Z3_mk_solver(context.z3val), context}
-	C.Z3_solver_inc_ref(context.z3val, solver.z3val)
+func NewSolver(ctx *Context) *Solver {
+	solver := &Solver{C.Z3_mk_solver(ctx.z3val), ctx}
+	C.Z3_solver_inc_ref(ctx.z3val, solver.z3val)
 	return solver
 }
 
 // NewSolverForLogic creates a new Z3 solver for a given logic.
-func NewSolverForLogic(context *Context, logic string) (*Solver, error) {
-	sym, err := NewStringSymbol(context, logic)
-	if err != nil {
-		return nil, err
-	}
-
-	solver := &Solver{C.Z3_mk_solver_for_logic(context.z3val, sym.z3val), context}
-	C.Z3_solver_inc_ref(context.z3val, solver.z3val)
-	return solver, nil
+func NewSolverForLogic(ctx *Context, logic string) *Solver {
+	sym := NewStringSymbol(ctx, logic)
+	solver := &Solver{C.Z3_mk_solver_for_logic(ctx.z3val, sym.z3val), ctx}
+	C.Z3_solver_inc_ref(ctx.z3val, solver.z3val)
+	return solver
 }

@@ -8,31 +8,23 @@ func getContext() *Context {
 }
 
 func TestBVSort32(t *testing.T) {
-	context := getContext()
-	sort, err := context.BVSort(32)
-	if err != nil {
-		t.Error("Expected valid sort, got", err)
+	ctx := getContext()
+	sort := ctx.BVSort(32)
+	if sort == nil {
+		t.Error("Expected valid sort, got nil")
 	}
-	astKind, err := sort.ASTKind()
-	if err != nil {
-		t.Error(err)
-	}
-	if astKind != SortAST {
+	if astKind := sort.ASTKind(); astKind != SortAST {
 		t.Error("Expected AST kind", SortAST, "got", astKind)
 	}
-	sortKind, err := sort.SortKind()
-	if err != nil {
-		t.Error(err)
-	}
-	if sortKind != BVSort {
+	if sortKind := sort.SortKind(); sortKind != BVSort {
 		t.Error("Expected sort kind", BVSort, "got", sortKind)
 	}
 }
 
 func TestBVSort0(t *testing.T) {
-	context := getContext()
-	_, err := context.BVSort(0)
-	if err == nil {
+	ctx := getContext()
+
+	if sort := ctx.BVSort(0); sort != nil {
 		t.Error("Expected error, got valid sort")
 	}
 }
