@@ -16,7 +16,7 @@ func (solver *Solver) String() string {
 
 func (solver *Solver) Reset() error {
 	C.Z3_solver_reset(solver.ctx.z3val, solver.z3val)
-	return getError(solver.ctx)
+	return solver.ctx.getError()
 }
 
 // NewSolver creates a new Z3 solver.
@@ -28,7 +28,7 @@ func NewSolver(ctx *Context) *Solver {
 
 // NewSolverForLogic creates a new Z3 solver for a given logic.
 func NewSolverForLogic(ctx *Context, logic string) *Solver {
-	sym := NewStringSymbol(ctx, logic)
+	sym := ctx.NewStringSymbol(logic)
 	solver := &Solver{C.Z3_mk_solver_for_logic(ctx.z3val, sym.z3val), ctx}
 	C.Z3_solver_inc_ref(ctx.z3val, solver.z3val)
 	return solver

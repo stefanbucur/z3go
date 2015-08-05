@@ -51,7 +51,7 @@ func NewConfig() *Config {
 }
 
 // -----------------------------------------------------------------------------
-// Errors
+// Error codes
 
 // ErrorCode represents a Z3 error code
 type ErrorCode int
@@ -115,82 +115,8 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-func getError(ctx *Context) error {
-	ec := ErrorCode(C.Z3_get_error_code(ctx.z3val))
-	if ec == OK {
-		ctx.LastError = nil
-		return nil
-	}
-	message := C.GoString(C.Z3_get_error_msg_ex(ctx.z3val, C.Z3_error_code(ec)))
-	ctx.LastError = &Error{ec, message}
-	return ctx.LastError
-}
-
 // -----------------------------------------------------------------------------
-// Contexts
-
-// Context encapsulates a Z3 context.
-type Context struct {
-	z3val     C.Z3_context
-	LastError *Error
-}
-
-// Symbol encapsulates a Z3 symbol
-type Symbol struct {
-	z3val C.Z3_symbol
-	ctx   *Context
-}
-
-func (ctx *Context) finalize() {
-	C.Z3_del_context(ctx.z3val)
-}
-
-func (ctx *Context) BVSort(size uint) *Sort {
-	z3sort, err := C.Z3_mk_bv_sort(ctx.z3val, C.uint(size)), getError(ctx)
-	if err != nil {
-		return nil
-	}
-	return newSort(ctx, z3sort)
-}
-
-func (ctx *Context) ArraySort(d *Sort, r *Sort) *Sort {
-	z3ds, z3rs := C.Z3_sort(unsafe.Pointer(d.z3val)), C.Z3_sort(unsafe.Pointer(r.z3val))
-	z3sort, err := C.Z3_mk_array_sort(ctx.z3val, z3ds, z3rs), getError(ctx)
-	if err != nil {
-		return nil
-	}
-	return newSort(ctx, z3sort)
-}
-
-// NewContext creates a new Z3 context.
-func NewContext(config *Config) *Context {
-	ctx := &Context{C.Z3_mk_context_rc(config.z3val), nil}
-	C.Z3_set_error_handler(ctx.z3val, nil)
-	runtime.SetFinalizer(ctx, (*Context).finalize)
-	return ctx
-}
-
-func NewStringSymbol(ctx *Context, value string) *Symbol {
-	cValue := C.CString(value)
-	defer C.free(unsafe.Pointer(cValue))
-
-	z3sym, err := C.Z3_mk_string_symbol(ctx.z3val, cValue), getError(ctx)
-	if err != nil {
-		return nil
-	}
-	return &Symbol{z3sym, ctx}
-}
-
-func NewIntSymbol(ctx *Context, value int) *Symbol {
-	z3sym, err := C.Z3_mk_int_symbol(ctx.z3val, C.int(value)), getError(ctx)
-	if err != nil {
-		return nil
-	}
-	return &Symbol{z3sym, ctx}
-}
-
-// -----------------------------------------------------------------------------
-// ASTs
+// AST constants
 
 // ASTKind represents a type of AST node
 type ASTKind int
@@ -273,20 +199,73 @@ func (sk SortKind) String() string {
 	}
 }
 
+// -----------------------------------------------------------------------------
+// Contexts
+
 type (
-	AST struct {
-		z3val C.Z3_ast
-		ctx   *Context
-	}
-
-	Expr struct {
-		AST
-	}
-
-	Sort struct {
-		AST
+	Context struct {
+		z3val     C.Z3_context
+		LastError *Error
 	}
 )
+
+// NewContext creates a new Z3 context.
+func NewContext(config *Config) *Context {
+	ctx := &Context{C.Z3_mk_context_rc(config.z3val), nil}
+	C.Z3_set_error_handler(ctx.z3val, nil)
+	runtime.SetFinalizer(ctx, (*Context).finalize)
+	return ctx
+}
+
+func (ctx *Context) finalize() {
+	C.Z3_del_context(ctx.z3val)
+}
+
+func (ctx *Context) getError() error {
+	ec := ErrorCode(C.Z3_get_error_code(ctx.z3val))
+	if ec == OK {
+		ctx.LastError = nil
+		return nil
+	}
+	message := C.GoString(C.Z3_get_error_msg_ex(ctx.z3val, C.Z3_error_code(ec)))
+	ctx.LastError = &Error{ec, message}
+	return ctx.LastError
+}
+
+// -----------------------------------------------------------------------------
+// Symbols
+
+type Symbol struct {
+	z3val C.Z3_symbol
+	ctx   *Context
+}
+
+func (ctx *Context) NewStringSymbol(value string) *Symbol {
+	cValue := C.CString(value)
+	defer C.free(unsafe.Pointer(cValue))
+
+	z3sym, err := C.Z3_mk_string_symbol(ctx.z3val, cValue), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return &Symbol{z3sym, ctx}
+}
+
+func (ctx *Context) NewIntSymbol(value int) *Symbol {
+	z3sym, err := C.Z3_mk_int_symbol(ctx.z3val, C.int(value)), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return &Symbol{z3sym, ctx}
+}
+
+// -----------------------------------------------------------------------------
+// ASTs
+
+type AST struct {
+	z3val C.Z3_ast
+	ctx   *Context
+}
 
 func (ast *AST) ASTKind() ASTKind {
 	return ASTKind(C.Z3_get_ast_kind(ast.ctx.z3val, ast.z3val))
@@ -305,11 +284,11 @@ func (ast *AST) finalize() {
 	C.Z3_dec_ref(ast.ctx.z3val, ast.z3val)
 }
 
-func newSort(ctx *Context, z3sort C.Z3_sort) *Sort {
-	z3ast := C.Z3_ast(unsafe.Pointer(z3sort))
-	sort := &Sort{AST{z3ast, ctx}}
-	sort.initialize()
-	return sort
+// -----------------------------------------------------------------------------
+// Sorts
+
+type Sort struct {
+	AST
 }
 
 func (sort *Sort) SortKind() SortKind {
@@ -317,30 +296,84 @@ func (sort *Sort) SortKind() SortKind {
 	return SortKind(C.Z3_get_sort_kind(sort.ctx.z3val, z3sort))
 }
 
-func (sort *Sort) BVSize() (size uint, err error) {
+func (sort *Sort) BVSize() uint {
 	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	z3size, err := C.Z3_get_bv_sort_size(sort.ctx.z3val, z3sort), getError(sort.ctx)
+	z3size, err := C.Z3_get_bv_sort_size(sort.ctx.z3val, z3sort), sort.ctx.getError()
 	if err != nil {
-		return
+		return 0
 	}
-	size = uint(z3size)
-	return
+	return uint(z3size)
 }
 
 func (sort *Sort) ArrayDomain() *Sort {
 	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	z3DomSort, err := C.Z3_get_array_sort_domain(sort.ctx.z3val, z3sort), getError(sort.ctx)
+	z3DomSort, err := C.Z3_get_array_sort_domain(sort.ctx.z3val, z3sort), sort.ctx.getError()
 	if err != nil {
 		return nil
 	}
-	return newSort(sort.ctx, z3DomSort)
+	return sort.ctx.newSort(z3DomSort)
 }
 
 func (sort *Sort) ArrayRange() *Sort {
 	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	z3RangeSort, err := C.Z3_get_array_sort_range(sort.ctx.z3val, z3sort), getError(sort.ctx)
+	z3RangeSort, err := C.Z3_get_array_sort_range(sort.ctx.z3val, z3sort), sort.ctx.getError()
 	if err != nil {
 		return nil
 	}
-	return newSort(sort.ctx, z3RangeSort)
+	return sort.ctx.newSort(z3RangeSort)
+}
+
+func (ctx *Context) newSort(z3sort C.Z3_sort) *Sort {
+	z3ast := C.Z3_ast(unsafe.Pointer(z3sort))
+	sort := &Sort{AST{z3ast, ctx}}
+	sort.initialize()
+	return sort
+}
+
+func (ctx *Context) BVSort(size uint) *Sort {
+	z3sort, err := C.Z3_mk_bv_sort(ctx.z3val, C.uint(size)), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newSort(z3sort)
+}
+
+func (ctx *Context) ArraySort(d *Sort, r *Sort) *Sort {
+	z3ds, z3rs := C.Z3_sort(unsafe.Pointer(d.z3val)), C.Z3_sort(unsafe.Pointer(r.z3val))
+	z3sort, err := C.Z3_mk_array_sort(ctx.z3val, z3ds, z3rs), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newSort(z3sort)
+}
+
+// -----------------------------------------------------------------------------
+// Expressions
+
+type Expr struct {
+	AST
+}
+
+func (expr *Expr) Sort() *Sort {
+	z3sort, err := C.Z3_get_sort(expr.ctx.z3val, expr.z3val), expr.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return expr.ctx.newSort(z3sort)
+}
+
+func (ctx *Context) newExpr(z3ast C.Z3_ast) *Expr {
+	expr := &Expr{AST{z3ast, ctx}}
+	expr.initialize()
+	return expr
+}
+
+func (ctx *Context) Constant(name string, sort *Sort) *Expr {
+	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
+	nameSym := ctx.NewStringSymbol(name)
+	z3ast, err := C.Z3_mk_const(ctx.z3val, nameSym.z3val, z3sort), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newExpr(z3ast)
 }
