@@ -330,6 +330,14 @@ func (ctx *Context) newSort(z3sort C.Z3_sort) *Sort {
 	return sort
 }
 
+func (ctx *Context) BoolSort() *Sort {
+	z3sort, err := C.Z3_mk_bool_sort(ctx.z3val), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newSort(z3sort)
+}
+
 func (ctx *Context) BVSort(size uint) *Sort {
 	z3sort, err := C.Z3_mk_bv_sort(ctx.z3val, C.uint(size)), ctx.getError()
 	if err != nil {
@@ -376,4 +384,112 @@ func (ctx *Context) Constant(name string, sort *Sort) *Expr {
 		return nil
 	}
 	return ctx.newExpr(z3ast)
+}
+
+func (ctx *Context) BVConst(name string, size uint) *Expr {
+	return ctx.Constant(name, ctx.BVSort(size))
+}
+
+func (ctx *Context) BoolConst(name string) *Expr {
+	return ctx.Constant(name, ctx.BoolSort())
+}
+
+func (ctx *Context) BoolVal(b bool) *Expr {
+	var z3ast C.Z3_ast
+	var err error
+	if b {
+		z3ast, err = C.Z3_mk_true(ctx.z3val), ctx.getError()
+	} else {
+		z3ast, err = C.Z3_mk_false(ctx.z3val), ctx.getError()
+	}
+	if err != nil {
+		return nil
+	}
+	return ctx.newExpr(z3ast)
+}
+
+func (ctx *Context) BVIntVal(n int, size uint) *Expr {
+	z3sort := C.Z3_sort(unsafe.Pointer(ctx.BVSort(size).z3val))
+	z3ast, err := C.Z3_mk_int(ctx.z3val, C.int(n), z3sort)
+	if err != nil {
+		return nil
+	}
+	return ctx.newExpr(z3ast)
+}
+
+func (ctx *Context) BVUintVal(n uint, size uint) *Expr {
+	z3sort := C.Z3_sort(unsafe.Pointer(ctx.BVSort(size).z3val))
+	z3ast, err := C.Z3_mk_unsigned_int(ctx.z3val, C.uint(n), z3sort)
+	if err != nil {
+		return nil
+	}
+	return ctx.newExpr(z3ast)
+}
+
+// -----------------------------------------------------------------------------
+// Operations
+
+func Store(a *Expr, i *Expr, v *Expr) *Expr {
+	z3ast, err := C.Z3_mk_store(a.ctx.z3val, a.z3val, i.z3val, v.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+// -----------------------------------------------------------------------------
+// Solvers
+
+type LiftedBool int
+
+const (
+	LFalse LiftedBool = C.Z3_L_FALSE
+	LUndef LiftedBool = C.Z3_L_UNDEF
+	LTrue  LiftedBool = C.Z3_L_TRUE
+)
+
+// Solver encapsulates a Z3 solver instance.
+type Solver struct {
+	z3val C.Z3_solver
+	ctx   *Context
+}
+
+func (solver *Solver) String() string {
+	return C.GoString(C.Z3_solver_to_string(solver.ctx.z3val, solver.z3val))
+}
+
+func (solver *Solver) Reset() error {
+	C.Z3_solver_reset(solver.ctx.z3val, solver.z3val)
+	return solver.ctx.getError()
+}
+
+func (solver *Solver) Push() error {
+	C.Z3_solver_push(solver.ctx.z3val, solver.z3val)
+	return solver.ctx.getError()
+}
+
+func (solver *Solver) Pop(n uint) error {
+	C.Z3_solver_pop(solver.ctx.z3val, solver.z3val, C.uint(n))
+	return solver.ctx.getError()
+}
+
+func (solver *Solver) Check() (result LiftedBool, err error) {
+	result = LiftedBool(C.Z3_solver_check(solver.ctx.z3val, solver.z3val))
+	err = solver.ctx.getError()
+	return
+}
+
+// NewSolver creates a new Z3 solver.
+func NewSolver(ctx *Context) *Solver {
+	solver := &Solver{C.Z3_mk_solver(ctx.z3val), ctx}
+	C.Z3_solver_inc_ref(ctx.z3val, solver.z3val)
+	return solver
+}
+
+// NewSolverForLogic creates a new Z3 solver for a given logic.
+func NewSolverForLogic(ctx *Context, logic string) *Solver {
+	sym := ctx.NewStringSymbol(logic)
+	solver := &Solver{C.Z3_mk_solver_for_logic(ctx.z3val, sym.z3val), ctx}
+	C.Z3_solver_inc_ref(ctx.z3val, solver.z3val)
+	return solver
 }
