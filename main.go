@@ -1,20 +1,16 @@
 package main
 
-import (
-	"fmt"
-
-	"github.com/stefanbucur/z3go/z3"
-)
-
 func main() {
-	config := z3.NewConfig()
-	config.SetParamInt("timeout", 1000)
+	game := [][]int{
+		{5, 3, 0, 0, 7, 0, 0, 0, 0},
+		{6, 0, 0, 1, 9, 5, 0, 0, 0},
+		{0, 9, 8, 0, 0, 0, 0, 6, 0},
+		{8, 0, 0, 0, 6, 0, 0, 0, 3},
+		{4, 0, 0, 8, 0, 3, 0, 0, 1},
+		{7, 0, 0, 0, 2, 0, 0, 0, 6},
+		{0, 6, 0, 0, 0, 0, 2, 8, 0},
+		{0, 0, 0, 4, 1, 9, 0, 0, 5},
+		{0, 0, 0, 0, 8, 0, 0, 7, 9}}
 
-	context := z3.NewContext(config)
-	solver := z3.NewSolverForLogic(context, "QF_ABV")
-	fmt.Println("Created solver", solver)
-
-	sort := context.BVSort(32)
-	fmt.Printf("Created sort %s of AST kind %q and sort kind %q\n",
-		sort, sort.ASTKind(), sort.SortKind())
+	solveSudoku(game)
 }

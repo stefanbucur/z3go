@@ -291,14 +291,16 @@ type Sort struct {
 	AST
 }
 
+func (sort *Sort) z3sort() C.Z3_sort {
+	return C.Z3_sort(unsafe.Pointer(sort.z3val))
+}
+
 func (sort *Sort) SortKind() SortKind {
-	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	return SortKind(C.Z3_get_sort_kind(sort.ctx.z3val, z3sort))
+	return SortKind(C.Z3_get_sort_kind(sort.ctx.z3val, sort.z3sort()))
 }
 
 func (sort *Sort) BVSize() uint {
-	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	z3size, err := C.Z3_get_bv_sort_size(sort.ctx.z3val, z3sort), sort.ctx.getError()
+	z3size, err := C.Z3_get_bv_sort_size(sort.ctx.z3val, sort.z3sort()), sort.ctx.getError()
 	if err != nil {
 		return 0
 	}
@@ -306,8 +308,7 @@ func (sort *Sort) BVSize() uint {
 }
 
 func (sort *Sort) ArrayDomain() *Sort {
-	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	z3DomSort, err := C.Z3_get_array_sort_domain(sort.ctx.z3val, z3sort), sort.ctx.getError()
+	z3DomSort, err := C.Z3_get_array_sort_domain(sort.ctx.z3val, sort.z3sort()), sort.ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -315,8 +316,7 @@ func (sort *Sort) ArrayDomain() *Sort {
 }
 
 func (sort *Sort) ArrayRange() *Sort {
-	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
-	z3RangeSort, err := C.Z3_get_array_sort_range(sort.ctx.z3val, z3sort), sort.ctx.getError()
+	z3RangeSort, err := C.Z3_get_array_sort_range(sort.ctx.z3val, sort.z3sort()), sort.ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -338,6 +338,14 @@ func (ctx *Context) BoolSort() *Sort {
 	return ctx.newSort(z3sort)
 }
 
+func (ctx *Context) IntSort() *Sort {
+	z3sort, err := C.Z3_mk_int_sort(ctx.z3val), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newSort(z3sort)
+}
+
 func (ctx *Context) BVSort(size uint) *Sort {
 	z3sort, err := C.Z3_mk_bv_sort(ctx.z3val, C.uint(size)), ctx.getError()
 	if err != nil {
@@ -347,8 +355,7 @@ func (ctx *Context) BVSort(size uint) *Sort {
 }
 
 func (ctx *Context) ArraySort(d *Sort, r *Sort) *Sort {
-	z3ds, z3rs := C.Z3_sort(unsafe.Pointer(d.z3val)), C.Z3_sort(unsafe.Pointer(r.z3val))
-	z3sort, err := C.Z3_mk_array_sort(ctx.z3val, z3ds, z3rs), ctx.getError()
+	z3sort, err := C.Z3_mk_array_sort(ctx.z3val, d.z3sort(), r.z3sort()), ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -377,9 +384,8 @@ func (ctx *Context) newExpr(z3ast C.Z3_ast) *Expr {
 }
 
 func (ctx *Context) Constant(name string, sort *Sort) *Expr {
-	z3sort := C.Z3_sort(unsafe.Pointer(sort.z3val))
 	nameSym := ctx.NewStringSymbol(name)
-	z3ast, err := C.Z3_mk_const(ctx.z3val, nameSym.z3val, z3sort), ctx.getError()
+	z3ast, err := C.Z3_mk_const(ctx.z3val, nameSym.z3val, sort.z3sort()), ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -392,6 +398,10 @@ func (ctx *Context) BVConst(name string, size uint) *Expr {
 
 func (ctx *Context) BoolConst(name string) *Expr {
 	return ctx.Constant(name, ctx.BoolSort())
+}
+
+func (ctx *Context) IntConst(name string) *Expr {
+	return ctx.Constant(name, ctx.IntSort())
 }
 
 func (ctx *Context) BoolVal(b bool) *Expr {
@@ -408,9 +418,24 @@ func (ctx *Context) BoolVal(b bool) *Expr {
 	return ctx.newExpr(z3ast)
 }
 
+func (ctx *Context) IntVal(n int) *Expr {
+	z3ast, err := C.Z3_mk_int(ctx.z3val, C.int(n), ctx.IntSort().z3sort()), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newExpr(z3ast)
+}
+
+func (ctx *Context) UintVal(n uint) *Expr {
+	z3ast, err := C.Z3_mk_unsigned_int(ctx.z3val, C.uint(n), ctx.IntSort().z3sort()), ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return ctx.newExpr(z3ast)
+}
+
 func (ctx *Context) BVIntVal(n int, size uint) *Expr {
-	z3sort := C.Z3_sort(unsafe.Pointer(ctx.BVSort(size).z3val))
-	z3ast, err := C.Z3_mk_int(ctx.z3val, C.int(n), z3sort)
+	z3ast, err := C.Z3_mk_int(ctx.z3val, C.int(n), ctx.BVSort(size).z3sort()), ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -418,8 +443,7 @@ func (ctx *Context) BVIntVal(n int, size uint) *Expr {
 }
 
 func (ctx *Context) BVUintVal(n uint, size uint) *Expr {
-	z3sort := C.Z3_sort(unsafe.Pointer(ctx.BVSort(size).z3val))
-	z3ast, err := C.Z3_mk_unsigned_int(ctx.z3val, C.uint(n), z3sort)
+	z3ast, err := C.Z3_mk_unsigned_int(ctx.z3val, C.uint(n), ctx.BVSort(size).z3sort()), ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -429,13 +453,117 @@ func (ctx *Context) BVUintVal(n uint, size uint) *Expr {
 // -----------------------------------------------------------------------------
 // Operations
 
-func Store(a *Expr, i *Expr, v *Expr) *Expr {
+// Array operations
+
+func Store(a, i, v *Expr) *Expr {
 	z3ast, err := C.Z3_mk_store(a.ctx.z3val, a.z3val, i.z3val, v.z3val), a.ctx.getError()
 	if err != nil {
 		return nil
 	}
 	return a.ctx.newExpr(z3ast)
 }
+
+// Boolean operators
+
+func Not(a *Expr) *Expr {
+	z3ast, err := C.Z3_mk_not(a.ctx.z3val, a.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+func And(e ...*Expr) *Expr {
+	ops := make([]C.Z3_ast, len(e))
+	for _, expr := range e {
+		ops = append(ops, expr.z3val)
+	}
+	z3ast, err := C.Z3_mk_and(e[0].ctx.z3val, C.uint(len(ops)), &ops[0]), e[0].ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return e[0].ctx.newExpr(z3ast)
+}
+
+func Or(e ...*Expr) *Expr {
+	ops := make([]C.Z3_ast, len(e))
+	for _, expr := range e {
+		ops = append(ops, expr.z3val)
+	}
+	z3ast, err := C.Z3_mk_or(e[0].ctx.z3val, C.uint(len(ops)), &ops[0]), e[0].ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return e[0].ctx.newExpr(z3ast)
+}
+
+// Arithmetic operators
+
+// Comparison operators
+
+func Eq(a, b *Expr) *Expr {
+	z3ast, err := C.Z3_mk_eq(a.ctx.z3val, a.z3val, b.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+func Distinct(e ...*Expr) *Expr {
+	ops := make([]C.Z3_ast, len(e))
+	for _, expr := range e {
+		ops = append(ops, expr.z3val)
+	}
+	z3ast, err := C.Z3_mk_distinct(e[0].ctx.z3val, C.uint(len(ops)), &ops[0]), e[0].ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return e[0].ctx.newExpr(z3ast)
+}
+
+func Lt(a, b *Expr) *Expr {
+	z3ast, err := C.Z3_mk_lt(a.ctx.z3val, a.z3val, b.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+func Le(a, b *Expr) *Expr {
+	z3ast, err := C.Z3_mk_le(a.ctx.z3val, a.z3val, b.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+func Gt(a, b *Expr) *Expr {
+	z3ast, err := C.Z3_mk_gt(a.ctx.z3val, a.z3val, b.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+func Ge(a, b *Expr) *Expr {
+	z3ast, err := C.Z3_mk_ge(a.ctx.z3val, a.z3val, b.z3val), a.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return a.ctx.newExpr(z3ast)
+}
+
+// ITE
+
+func Ite(c, t, e *Expr) *Expr {
+	z3ast, err := C.Z3_mk_ite(c.ctx.z3val, c.z3val, t.z3val, e.z3val), c.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return c.ctx.newExpr(z3ast)
+}
+
+// Quantifiers
 
 // -----------------------------------------------------------------------------
 // Solvers
@@ -447,6 +575,19 @@ const (
 	LUndef LiftedBool = C.Z3_L_UNDEF
 	LTrue  LiftedBool = C.Z3_L_TRUE
 )
+
+func (lb LiftedBool) String() string {
+	switch lb {
+	case LFalse:
+		return "false"
+	case LUndef:
+		return "undef"
+	case LTrue:
+		return "true"
+	default:
+		return ""
+	}
+}
 
 // Solver encapsulates a Z3 solver instance.
 type Solver struct {
