@@ -473,12 +473,17 @@ func Not(a *Expr) *Expr {
 	return a.ctx.newExpr(z3ast)
 }
 
-func And(e ...*Expr) *Expr {
-	ops := make([]C.Z3_ast, len(e))
-	for _, expr := range e {
-		ops = append(ops, expr.z3val)
+func extractASTs(e []*Expr) (asts []C.Z3_ast) {
+	asts = make([]C.Z3_ast, len(e))
+	for i, expr := range e {
+		asts[i] = expr.z3val
 	}
-	z3ast, err := C.Z3_mk_and(e[0].ctx.z3val, C.uint(len(ops)), &ops[0]), e[0].ctx.getError()
+	return
+}
+
+func And(e ...*Expr) *Expr {
+	asts := extractASTs(e)
+	z3ast, err := C.Z3_mk_and(e[0].ctx.z3val, C.uint(len(asts)), &asts[0]), e[0].ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -486,11 +491,8 @@ func And(e ...*Expr) *Expr {
 }
 
 func Or(e ...*Expr) *Expr {
-	ops := make([]C.Z3_ast, len(e))
-	for _, expr := range e {
-		ops = append(ops, expr.z3val)
-	}
-	z3ast, err := C.Z3_mk_or(e[0].ctx.z3val, C.uint(len(ops)), &ops[0]), e[0].ctx.getError()
+	asts := extractASTs(e)
+	z3ast, err := C.Z3_mk_or(e[0].ctx.z3val, C.uint(len(asts)), &asts[0]), e[0].ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -510,11 +512,8 @@ func Eq(a, b *Expr) *Expr {
 }
 
 func Distinct(e ...*Expr) *Expr {
-	ops := make([]C.Z3_ast, len(e))
-	for _, expr := range e {
-		ops = append(ops, expr.z3val)
-	}
-	z3ast, err := C.Z3_mk_distinct(e[0].ctx.z3val, C.uint(len(ops)), &ops[0]), e[0].ctx.getError()
+	asts := extractASTs(e)
+	z3ast, err := C.Z3_mk_distinct(e[0].ctx.z3val, C.uint(len(asts)), &asts[0]), e[0].ctx.getError()
 	if err != nil {
 		return nil
 	}
@@ -620,6 +619,16 @@ func (solver *Solver) Check() (result LiftedBool, err error) {
 	return
 }
 
+func (solver *Solver) Add(a ...*Expr) error {
+	for _, expr := range a {
+		C.Z3_solver_assert(solver.ctx.z3val, solver.z3val, expr.z3val)
+		if err := solver.ctx.getError(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NewSolver creates a new Z3 solver.
 func NewSolver(ctx *Context) *Solver {
 	solver := &Solver{C.Z3_mk_solver(ctx.z3val), ctx}
@@ -633,4 +642,48 @@ func NewSolverForLogic(ctx *Context, logic string) *Solver {
 	solver := &Solver{C.Z3_mk_solver_for_logic(ctx.z3val, sym.z3val), ctx}
 	C.Z3_solver_inc_ref(ctx.z3val, solver.z3val)
 	return solver
+}
+
+// -----------------------------------------------------------------------------
+// Models
+
+type Model struct {
+	z3val C.Z3_model
+	ctx   *Context
+}
+
+func (ctx *Context) newModel(z3model C.Z3_model) (model *Model) {
+	model = &Model{z3model, ctx}
+	C.Z3_model_inc_ref(ctx.z3val, z3model)
+	return model
+}
+
+func (solver *Solver) GetModel() *Model {
+	z3model, err := C.Z3_solver_get_model(solver.ctx.z3val, solver.z3val), solver.ctx.getError()
+	if err != nil {
+		return nil
+	}
+	return solver.ctx.newModel(z3model)
+}
+
+func (model *Model) String() string {
+	return C.GoString(C.Z3_model_to_string(model.ctx.z3val, model.z3val))
+}
+
+func getZ3Bool(b bool) C.Z3_bool {
+	if b {
+		return C.Z3_TRUE
+	} else {
+		return C.Z3_FALSE
+	}
+}
+
+func (model *Model) Eval(n *Expr, completion bool) (result *Expr) {
+	var z3result C.Z3_ast
+	status := C.Z3_model_eval(model.ctx.z3val, model.z3val, n.z3val,
+		getZ3Bool(completion), &z3result) == C.Z3_TRUE
+	if status {
+		result = model.ctx.newExpr(z3result)
+	}
+	return
 }
